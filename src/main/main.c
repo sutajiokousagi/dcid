@@ -19,6 +19,10 @@
 #define DCID_DEVICE_PATH "/dev/i2c-0"
 #endif
 
+#if defined(CNPLATFORM_netv)
+#define DCID_DEVICE_PATH "/dev/mmcblk0p1"
+#endif
+
 #if defined(CNPLATFORM_ironforge)
 #define DCID_DEVICE_PATH "/dev/dcid"
 #endif

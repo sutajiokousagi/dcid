@@ -18,6 +18,84 @@
 #include <stdio.h>
 #endif
 
+
+#ifdef CNPLATFORM_netv
+#include <unistd.h>
+#include <fcntl.h>
+#include <stdio.h>
+/*************************************************************************/
+#define ESD_CONFIG_AREA_PART1_OFFSET    0xc000
+// pragma pack() not supported on all platforms, so we make everything dword-aligned using arrays
+// WARNING: we're being lazy here and assuming that the platform any utility using this
+// is running on little-endian! Otherwise you'll need to convert u32 values
+typedef union {
+        char name[4];
+        unsigned int uname;
+} block_def_name;
+
+typedef struct _block_def {
+        unsigned int offset;            // Offset from start of partition 1; if 0xffffffff, end of block table
+        unsigned int length;            // Length of block in bytes
+        unsigned char block_ver[4];     // Version of this block data, e.g. 1,0,0,0
+        block_def_name n;               // Name of block, e.g. "krnA" (not NULL-terminated, a-z, A-Z, 0-9 and non-escape symbols allowed)
+} block_def;
+
+typedef struct _config_area {
+        char sig[4];    // 'C','f','g','*'
+        unsigned char area_version[4];  // 1,0,0,0
+        unsigned char active_index[4];  // element 0 is 0 if krnA active, 1 if krnB; elements 1-3 are padding
+        unsigned char updating[4];      // element 0 is 1 if update in progress; elements 1-3 are padding
+        char last_update[16];           // NULL-terminated version of last successful update, e.g. "1.7.1892"
+        unsigned int p1_offset;         // Offset in bytes from start of device to start of partition 1
+        char factory_data[220];         // Data recorded in manufacturing in format KEY=VALUE<newline>...
+        char configname[128];           // NULL-terminated CONFIGNAME of current build, e.g. "silvermoon_sd"
+        unsigned char unused2[128];
+        unsigned char mbr_backup[512];  // Backup copy of MBR
+        block_def block_table[64];      // Block table entries ending with offset==0xffffffff
+        unsigned char unused3[0];
+} config_area;
+
+static int seek_config_block(dcid_t *p_dcid, char *name) {
+    int block;
+    config_area cfg;
+
+    if (p_dcid->device_file == -1) {
+        perror("Unable to open config block device");
+        return 0;
+    }
+
+    /* Seek to config table */
+    if (-1 == lseek(p_dcid->device_file, ESD_CONFIG_AREA_PART1_OFFSET, SEEK_SET)) {
+        perror("Unable to seek to config area");
+        goto out;
+    }
+
+    /* Read config table */
+    if (-1 == read(p_dcid->device_file, &cfg, sizeof(cfg))) {
+        perror("Unable to read config area");
+        goto out;
+    }
+
+    /* Locate cpid block */
+    for (block=0; block < sizeof(cfg.block_table) / sizeof(cfg.block_table[0]); block++) {
+        if (!memcmp(cfg.block_table[block].n.name, name, 4)) {
+
+            /* Seek to specified block */
+            if (-1 == lseek(p_dcid->device_file, cfg.block_table[block].offset, SEEK_SET)) {
+                perror("Unable to seek to cpid block");
+                goto out;
+            }
+
+            return 1;
+        }
+    }
+
+out:
+    return 0;
+}
+#endif
+
+
 #ifdef CNPLATFORM_falconwing
 #include <linux/i2c.h>
 #include <linux/i2c-dev.h>
@@ -86,6 +164,12 @@ int dcid_util_write_flush(dcid_t *p_dcid)
 {
     int v;
 
+#if defined(CNPLATFORM_netv)
+    if (!seek_config_block(p_dcid, "dcid"))
+        return DCID_FAIL;
+#endif // defined(CNPLATFORM_netv)
+
+
     for(v=0;v<=DCID_MAX_ADDRESS;v++)
     {
         uint16_t cur = p_dcid->write_cache[v];
@@ -104,6 +188,15 @@ int dcid_util_write_flush(dcid_t *p_dcid)
             return DCID_FAIL;
         }
 #endif // defined(CNPLATFORM_avlite)
+
+
+#if defined(CNPLATFORM_netv)
+        int ret = 0;
+        if(-1 == write(p_dcid->device_file, (uint8_t *)&cur, sizeof(uint8_t))) {
+            perror("Unable to write");
+            return DCID_FAIL;
+        }
+#endif
 
 #if defined(CNPLATFORM_falconwing) || defined(CNPLATFORM_silvermoon)
         unsigned char output[2];
@@ -184,6 +277,20 @@ int dcid_util_read_byte(dcid_t *p_dcid, unsigned int addr, uint8_t *p_byte_ret)
         return DCID_FAIL;
     }
 #endif // defined(CNPLATFORM_avlite)
+
+#if defined(CNPLATFORM_netv)
+    int ret = 0;
+    if (!seek_config_block(p_dcid, "dcid"))
+        return DCID_FAIL;
+    if (-1 == lseek(p_dcid->device_file, ed.address, SEEK_CUR)) {
+        perror("Unable to seek");
+        return DCID_FAIL;
+    }
+    if (-1 == read(p_dcid->device_file, &ed.data, sizeof(uint8_t))) {
+        perror("Unable to read");
+        return DCID_FAIL;
+    }
+#endif // defined(CNPLATFORM_netv)
 
 #if defined(CNPLATFORM_falconwing) || defined(CNPLATFORM_silvermoon)
     int byte = 0;
