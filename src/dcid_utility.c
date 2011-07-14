@@ -19,7 +19,7 @@
 #endif
 
 
-#ifdef CNPLATFORM_netv
+#if defined(CNPLATFORM_netv) || defined(CNPLATFORM_wintergrasp)
 #include <unistd.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -164,10 +164,10 @@ int dcid_util_write_flush(dcid_t *p_dcid)
 {
     int v;
 
-#if defined(CNPLATFORM_netv)
+#if defined(CNPLATFORM_netv) || defined(CNPLATFORM_wintergrasp)
     if (!seek_config_block(p_dcid, "dcid"))
         return DCID_FAIL;
-#endif // defined(CNPLATFORM_netv)
+#endif
 
 
     for(v=0;v<=DCID_MAX_ADDRESS;v++)
@@ -190,7 +190,7 @@ int dcid_util_write_flush(dcid_t *p_dcid)
 #endif // defined(CNPLATFORM_avlite)
 
 
-#if defined(CNPLATFORM_netv)
+#if defined(CNPLATFORM_netv) || defined(CNPLATFORM_wintergrasp)
         int ret = 0;
         if(-1 == write(p_dcid->device_file, (uint8_t *)&cur, sizeof(uint8_t))) {
             perror("Unable to write");
@@ -278,7 +278,7 @@ int dcid_util_read_byte(dcid_t *p_dcid, unsigned int addr, uint8_t *p_byte_ret)
     }
 #endif // defined(CNPLATFORM_avlite)
 
-#if defined(CNPLATFORM_netv)
+#if defined(CNPLATFORM_netv) || defined(CNPLATFORM_wintergrasp)
     int ret = 0;
     if (!seek_config_block(p_dcid, "dcid"))
         return DCID_FAIL;
@@ -290,7 +290,7 @@ int dcid_util_read_byte(dcid_t *p_dcid, unsigned int addr, uint8_t *p_byte_ret)
         perror("Unable to read");
         return DCID_FAIL;
     }
-#endif // defined(CNPLATFORM_netv)
+#endif
 
 #if defined(CNPLATFORM_falconwing) || defined(CNPLATFORM_silvermoon)
     int byte = 0;
