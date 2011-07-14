@@ -31,6 +31,10 @@
 #define DCID_DEVICE_PATH "/psp/dcid.bin"
 #endif
 
+#if defined(CNPLATFORM_wintergrasp)
+#define DCID_DEVICE_PATH "/dev/mmcblk0p2"
+#endif
+
 /*! print program usage screen */
 static void show_usage();
 
